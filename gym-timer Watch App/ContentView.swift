@@ -1,6 +1,6 @@
 //
 //  ContentView.swift
-//  gym-tracker Watch App
+//  gym-timer Watch App
 //
 //  Created by Mario on 08.06.26.
 //
@@ -9,13 +9,9 @@ import SwiftUI
 
 struct ContentView: View {
     var body: some View {
-        VStack {
-            Image(systemName: "globe")
-                .imageScale(.large)
-                .foregroundStyle(.tint)
-            Text("Hello, world!")
+        NavigationStack {
+            TimerView()
         }
-        .padding()
     }
 }
 
