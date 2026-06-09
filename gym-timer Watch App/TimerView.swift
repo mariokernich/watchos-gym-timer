@@ -3,13 +3,23 @@
 //  gym-timer Watch App
 //
 //  Main view: Start / Reset buttons and countdown display.
+//  In idle mode the duration can be adjusted with the Digital Crown.
 //
 
 import SwiftUI
+import WatchKit
 
 struct TimerView: View {
     @StateObject private var viewModel = TimerViewModel()
     @AppStorage(AppSettingsKey.durationSeconds) private var durationSeconds: Int = AppSettingsDefault.durationSeconds
+    @AppStorage(AppSettingsKey.hapticsEnabled)  private var hapticsEnabled: Bool = AppSettingsDefault.hapticsEnabled
+
+    /// Continuous crown value (in seconds). Mirrors `durationSeconds`
+    /// but allows smooth scrolling between snapped step values.
+    @State private var crownValue: Double = Double(AppSettingsDefault.durationSeconds)
+
+    /// Last snapped value – used to detect step changes for haptics.
+    @State private var lastSnappedSeconds: Int = AppSettingsDefault.durationSeconds
 
     var body: some View {
         VStack(spacing: 12) {
@@ -32,18 +42,38 @@ struct TimerView: View {
                 }
             }
         }
+        .onAppear {
+            crownValue = Double(durationSeconds)
+            lastSnappedSeconds = durationSeconds
+        }
     }
 
     // MARK: - Subviews
 
     private var idleDisplay: some View {
-        VStack(spacing: 4) {
+        VStack(spacing: 6) {
             Text(formatted(seconds: durationSeconds))
-                .font(.system(size: 44, weight: .semibold, design: .rounded))
+                .font(.system(size: 50, weight: .bold, design: .rounded))
                 .monospacedDigit()
-                .foregroundStyle(.secondary)
-            Text("Ready")
-                .font(.caption)
+                .foregroundStyle(.primary)
+                .contentTransition(.numericText())
+                .animation(.snappy, value: durationSeconds)
+                .focusable(true)
+                .digitalCrownRotation(
+                    $crownValue,
+                    from: Double(DurationLimits.minSeconds),
+                    through: Double(DurationLimits.maxSeconds),
+                    by: 1,
+                    sensitivity: .medium,
+                    isContinuous: false,
+                    isHapticFeedbackEnabled: false // we drive haptics per step ourselves
+                )
+                .onChange(of: crownValue) { _, newValue in
+                    handleCrownChange(newValue)
+                }
+
+            Text("Turn crown to adjust")
+                .font(.caption2)
                 .foregroundStyle(.secondary)
         }
     }
@@ -84,6 +114,18 @@ struct TimerView: View {
         }
         .tint(.red)
         .buttonStyle(.borderedProminent)
+    }
+
+    // MARK: - Crown handling
+
+    private func handleCrownChange(_ newValue: Double) {
+        let snapped = DurationLimits.snap(Int(newValue.rounded()))
+        guard snapped != lastSnappedSeconds else { return }
+        lastSnappedSeconds = snapped
+        durationSeconds = snapped
+        if hapticsEnabled {
+            WKInterfaceDevice.current().play(.click)
+        }
     }
 
     // MARK: - Helpers

@@ -2,7 +2,8 @@
 //  SettingsView.swift
 //  gym-timer Watch App
 //
-//  Pause duration (1/2/3 minutes) + sound & haptics toggles.
+//  Quick presets for pause duration + sound & haptics toggles.
+//  The exact duration is set on the main screen via the Digital Crown.
 //
 
 import SwiftUI
@@ -12,29 +13,37 @@ struct SettingsView: View {
     @AppStorage(AppSettingsKey.soundEnabled)    private var soundEnabled: Bool   = AppSettingsDefault.soundEnabled
     @AppStorage(AppSettingsKey.hapticsEnabled)  private var hapticsEnabled: Bool = AppSettingsDefault.hapticsEnabled
 
-    private let options: [(label: LocalizedStringKey, seconds: Int)] = [
-        ("1 Minute",  60),
-        ("2 Minutes", 120),
-        ("3 Minutes", 180)
+    private let presets: [(label: LocalizedStringKey, seconds: Int)] = [
+        ("0:30", 30),
+        ("1:00", 60),
+        ("1:30", 90),
+        ("2:00", 120),
+        ("3:00", 180),
+        ("5:00", 300)
     ]
 
     var body: some View {
         List {
-            Section("Timer length") {
-                ForEach(options, id: \.seconds) { option in
+            Section {
+                ForEach(presets, id: \.seconds) { preset in
                     Button {
-                        durationSeconds = option.seconds
+                        durationSeconds = preset.seconds
                     } label: {
                         HStack {
-                            Text(option.label)
+                            Text(preset.label)
+                                .monospacedDigit()
                             Spacer()
-                            if durationSeconds == option.seconds {
+                            if durationSeconds == preset.seconds {
                                 Image(systemName: "checkmark")
                                     .foregroundStyle(.green)
                             }
                         }
                     }
                 }
+            } header: {
+                Text("Quick presets")
+            } footer: {
+                Text("Use the Digital Crown on the main screen for fine adjustment.")
             }
 
             Section("Feedback") {
