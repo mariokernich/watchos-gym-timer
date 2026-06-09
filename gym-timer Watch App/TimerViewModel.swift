@@ -22,7 +22,7 @@ final class TimerViewModel: NSObject, ObservableObject {
     @Published private(set) var isRunning: Bool = false
 
     /// The last few seconds during which we emit tick feedback.
-    private let tickThresholdSeconds: Int = 5
+    private let tickThresholdSeconds: Int = 3
 
     // MARK: - Private State
 

@@ -53,7 +53,7 @@ struct TimerView: View {
             Text(formatted(seconds: viewModel.remainingSeconds))
                 .font(.system(size: 54, weight: .bold, design: .rounded))
                 .monospacedDigit()
-                .foregroundStyle(viewModel.remainingSeconds <= 5 ? .red : .primary)
+                .foregroundStyle(viewModel.remainingSeconds <= 3 ? .red : .primary)
                 .contentTransition(.numericText(countsDown: true))
                 .animation(.snappy, value: viewModel.remainingSeconds)
             Text("running …")
