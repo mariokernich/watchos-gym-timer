@@ -27,8 +27,16 @@ final class TimerViewModel: NSObject, ObservableObject {
     // MARK: - Private State
 
     private var endDate: Date?
-    private var timer: Timer?
+
+    /// Background dispatch timer – keeps firing even when the watch display
+    /// is asleep, as long as an `WKExtendedRuntimeSession` is active.
+    /// `Timer` on the main RunLoop would be paused as soon as the user
+    /// lowers their wrist, which is exactly the bug we are fixing here.
+    private var dispatchTimer: DispatchSourceTimer?
+    private let timerQueue = DispatchQueue(label: "com.gymtimer.countdown", qos: .userInteractive)
+
     private var lastTickedSecond: Int = -1
+    private var didFinish: Bool = false
 
     /// Extended runtime session that keeps the app in the foreground while
     /// the countdown is running (`.physicalTherapy` is intended for short
@@ -47,8 +55,12 @@ final class TimerViewModel: NSObject, ObservableObject {
 
         remainingSeconds = durationSeconds
         lastTickedSecond = -1
+        didFinish = false
         endDate = Date().addingTimeInterval(TimeInterval(durationSeconds))
         isRunning = true
+
+        // Make sure audio playback is allowed in the background (display off).
+        SoundPlayer.shared.activateSession()
 
         startRuntimeSession()
         startTimer()
@@ -61,28 +73,33 @@ final class TimerViewModel: NSObject, ObservableObject {
     func reset() {
         invalidateTimer()
         invalidateRuntimeSession()
+        SoundPlayer.shared.deactivateSession()
         remainingSeconds = 0
         endDate = nil
         isRunning = false
         lastTickedSecond = -1
+        didFinish = false
     }
 
     // MARK: - Timer Loop
 
     private func startTimer() {
+        let timer = DispatchSource.makeTimerSource(queue: timerQueue)
         // Tick 4× per second to keep drift low and to deliver accurate
         // tick feedback in the final seconds.
-        let timer = Timer(timeInterval: 0.25, repeats: true) { [weak self] _ in
-            Task { @MainActor in
+        timer.schedule(deadline: .now() + 0.25, repeating: 0.25, leeway: .milliseconds(50))
+        timer.setEventHandler { [weak self] in
+            // Hop back to the main actor to mutate @Published state safely.
+            Task { @MainActor [weak self] in
                 self?.tick()
             }
         }
-        RunLoop.main.add(timer, forMode: .common)
-        self.timer = timer
+        timer.resume()
+        dispatchTimer = timer
     }
 
     private func tick() {
-        guard let endDate else { return }
+        guard let endDate, !didFinish else { return }
 
         let remaining = max(0, Int(ceil(endDate.timeIntervalSinceNow)))
 
@@ -103,6 +120,9 @@ final class TimerViewModel: NSObject, ObservableObject {
     }
 
     private func finish() {
+        guard !didFinish else { return }
+        didFinish = true
+
         invalidateTimer()
 
         // Clear end signal: notification haptic + follow-up success.
@@ -115,12 +135,18 @@ final class TimerViewModel: NSObject, ObservableObject {
 
         isRunning = false
         endDate = nil
-        invalidateRuntimeSession()
+
+        // Keep the audio session active just long enough for the end sound
+        // to finish playing, then tear everything down.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
+            self?.invalidateRuntimeSession()
+            SoundPlayer.shared.deactivateSession()
+        }
     }
 
     private func invalidateTimer() {
-        timer?.invalidate()
-        timer = nil
+        dispatchTimer?.cancel()
+        dispatchTimer = nil
     }
 
     // MARK: - Feedback (Haptics + Sound)

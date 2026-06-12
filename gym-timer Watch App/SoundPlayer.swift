@@ -16,12 +16,35 @@ final class SoundPlayer {
     private var endPlayer: AVAudioPlayer?
 
     private init() {
-        configureAudioSession()
+        configureAudioSessionCategory()
         tickPlayer = loadPlayer(named: "tick", ext: "wav")
         endPlayer = loadPlayer(named: "end", ext: "wav")
     }
 
     // MARK: - Public API
+
+    /// Activates the shared `AVAudioSession`. Call this right before the
+    /// countdown starts so audio keeps playing when the watch display turns
+    /// off (wrist lowered).
+    func activateSession() {
+        let session = AVAudioSession.sharedInstance()
+        do {
+            try session.setActive(true, options: [])
+        } catch {
+            // Silently fail – audio is a nice-to-have.
+        }
+    }
+
+    /// Deactivates the audio session, e.g. when the countdown finishes or
+    /// is reset, so other audio sources can resume normally.
+    func deactivateSession() {
+        let session = AVAudioSession.sharedInstance()
+        do {
+            try session.setActive(false, options: [.notifyOthersOnDeactivation])
+        } catch {
+            // ignore
+        }
+    }
 
     func playTick() {
         play(tickPlayer)
@@ -52,13 +75,13 @@ final class SoundPlayer {
         }
     }
 
-    private func configureAudioSession() {
+    private func configureAudioSessionCategory() {
         let session = AVAudioSession.sharedInstance()
         do {
             // `.playback` ensures audio is audible even when the watch is in
-            // silent / muted state for notifications.
+            // silent / muted state for notifications. `.duckOthers` lowers
+            // any concurrent media (e.g. music) for the short tick/end cue.
             try session.setCategory(.playback, mode: .default, options: [.duckOthers])
-            try session.setActive(true, options: [])
         } catch {
             // Silently fail – audio is a nice-to-have, the timer still works.
         }
